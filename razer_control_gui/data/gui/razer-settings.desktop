@@ -1,6 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Razer Settings
-Comment=Manage settings from your Razer laptop
-Exec=/usr/bin/razer-settings
-Terminal=false
