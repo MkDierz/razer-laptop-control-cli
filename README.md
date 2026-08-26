@@ -22,9 +22,10 @@ To use the CLI without root, install the udev rule once:
 ```sh
 sudo cp data/udev/99-razer.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=hidraw
 ```
 
-(Replug or reboot afterwards.) Otherwise run the CLI with `sudo`.
+(Replug the laptop or reboot if permissions still don't apply.) Otherwise run the CLI with `sudo`.
 
 ## Usage
 
