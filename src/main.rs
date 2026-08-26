@@ -15,8 +15,18 @@ const AC_SYSFS_PATH: &str = "/sys/class/power_supply/AC/online";
     about = "Control fans, power modes and the RGB keyboard of Razer laptops"
 )]
 struct Cli {
+    /// Target power profile: ac or bat (auto-detects from power supply if omitted)
+    #[arg(long, value_enum)]
+    source: Option<PowerSource>,
+
     #[command(subcommand)]
     cmd: Cmd,
+}
+
+#[derive(ValueEnum, Clone, Copy, PartialEq)]
+enum PowerSource {
+    Ac,
+    Bat,
 }
 
 #[derive(Subcommand)]
@@ -75,40 +85,49 @@ enum WriteAttr {
 #[derive(Parser)]
 struct PowerParams {
     /// power mode (0 balanced, 1 gaming, 2 creator, 4 custom)
-    pwr: u8,
+    #[arg(long)]
+    power: u8,
     /// cpu boost (0-3), required with power mode 4
-    cpu_mode: Option<u8>,
+    #[arg(long)]
+    cpu: Option<u8>,
     /// gpu boost (0-2), required with power mode 4
-    gpu_mode: Option<u8>,
+    #[arg(long)]
+    gpu: Option<u8>,
 }
 
 #[derive(Parser)]
 struct FanParams {
     /// fan speed in RPM, 0 for automatic
+    #[arg(long)]
     speed: i32,
 }
 
 #[derive(Parser)]
 struct BrightnessParams {
     /// brightness percent (0-100)
+    #[arg(long)]
     brightness: u8,
 }
 
 #[derive(Parser)]
 struct LogoParams {
     /// logo mode (0 off, 1 on, 2 breathing)
-    logo_state: u8,
+    #[arg(long)]
+    state: u8,
 }
 
 #[derive(Parser)]
 struct SyncParams {
-    sync_state: OnOff,
+    #[arg(long)]
+    state: OnOff,
 }
 
 #[derive(Parser)]
 struct BhoParams {
+    #[arg(long)]
     state: OnOff,
     /// charging threshold, multiple of 5 between 50 and 80
+    #[arg(long)]
     threshold: Option<u8>,
 }
 
@@ -138,77 +157,101 @@ enum StandardEffect {
 #[derive(Parser)]
 struct WaveParams {
     /// direction (0 or 1)
+    #[arg(long)]
     direction: u8,
 }
 
 #[derive(Parser)]
 struct ReactiveParams {
     /// speed (0-255)
+    #[arg(long)]
     speed: u8,
     /// red (0-255)
+    #[arg(long)]
     red: u8,
     /// green (0-255)
+    #[arg(long)]
     green: u8,
     /// blue (0-255)
+    #[arg(long)]
     blue: u8,
 }
 
 #[derive(Parser)]
 struct BreathingParams {
     /// kind (0-2)
+    #[arg(long)]
     kind: u8,
     /// red1 (0-255)
+    #[arg(long)]
     red1: u8,
     /// green1 (0-255)
+    #[arg(long)]
     green1: u8,
     /// blue1 (0-255)
+    #[arg(long)]
     blue1: u8,
     /// red2 (0-255)
+    #[arg(long)]
     red2: u8,
     /// green2 (0-255)
+    #[arg(long)]
     green2: u8,
     /// blue2 (0-255)
+    #[arg(long)]
     blue2: u8,
 }
 
 #[derive(Parser)]
 struct StarlightParams {
     /// kind (0-2)
+    #[arg(long)]
     kind: u8,
     /// speed (0-255)
+    #[arg(long)]
     speed: u8,
     /// red1 (0-255)
+    #[arg(long)]
     red1: u8,
     /// green1 (0-255)
+    #[arg(long)]
     green1: u8,
     /// blue1 (0-255)
+    #[arg(long)]
     blue1: u8,
     /// red2 (0-255)
+    #[arg(long)]
     red2: u8,
     /// green2 (0-255)
+    #[arg(long)]
     green2: u8,
     /// blue2 (0-255)
+    #[arg(long)]
     blue2: u8,
 }
 
 #[derive(Parser)]
 struct StaticParams {
     /// red (0-255)
+    #[arg(long)]
     red: u8,
     /// green (0-255)
+    #[arg(long)]
     green: u8,
     /// blue (0-255)
+    #[arg(long)]
     blue: u8,
 }
 
 fn main() {
     let cli = Cli::parse();
+    let source = resolve_source(cli.source);
 
     match cli.cmd {
-        Cmd::Read { attr } => run_read(attr),
-        Cmd::Write { attr } => run_write(attr),
+        Cmd::Read { attr } => run_read(attr, source),
+        Cmd::Write { attr } => run_write(attr, source),
         Cmd::Effect { effect } => run_effect(effect),
-        Cmd::Restore => run_restore(),
+        Cmd::Restore => run_restore(source),
     }
 }
 
@@ -232,11 +275,15 @@ fn save_config(cfg: &Config) {
     }
 }
 
-fn power_source_idx() -> usize {
-    fs::read_to_string(AC_SYSFS_PATH)
-        .ok()
-        .map(|s| usize::from(s.trim() == "1"))
-        .unwrap_or(0)
+fn resolve_source(override_source: Option<PowerSource>) -> usize {
+    match override_source {
+        Some(PowerSource::Ac) => 1,
+        Some(PowerSource::Bat) => 0,
+        None => fs::read_to_string(AC_SYSFS_PATH)
+            .ok()
+            .map(|s| usize::from(s.trim() == "1"))
+            .unwrap_or(0),
+    }
 }
 
 fn fan_desc(rpm: i32) -> String {
@@ -285,33 +332,21 @@ fn valid_bho_threshold(threshold: u8) -> bool {
     threshold % 5 == 0 && (50..=80).contains(&threshold)
 }
 
-fn run_read(attr: ReadAttr) {
+fn run_read(attr: ReadAttr, source: usize) {
     let mut laptop = open_laptop();
     let cfg = load_config();
-    let source = power_source_idx();
 
     match attr {
         ReadAttr::Fan => {
-            let idx = source;
-            let rpm = if idx == source {
-                laptop.get_fan_rpm()
-            } else {
-                cfg.power[idx].fan_rpm
-            };
+            let rpm = laptop.get_fan_rpm();
             println!("Current fan setting: {}", fan_desc(rpm));
         }
         ReadAttr::Power => {
-            let idx = source;
-            let (mode, cpu, gpu) = if idx == source {
-                (
-                    laptop.get_power_mode_from_hardware(),
-                    laptop.get_cpu_boost(),
-                    laptop.get_gpu_boost(),
-                )
-            } else {
-                let p = &cfg.power[idx];
-                (p.power_mode, p.cpu_boost, p.gpu_boost)
-            };
+            let (mode, cpu, gpu) = (
+                laptop.get_power_mode_from_hardware(),
+                laptop.get_cpu_boost(),
+                laptop.get_gpu_boost(),
+            );
             println!("Current power setting: {}", power_mode_desc(mode));
             if mode == 4 {
                 println!("Current CPU setting: {}", boost_desc(cpu, 3));
@@ -319,12 +354,7 @@ fn run_read(attr: ReadAttr) {
             }
         }
         ReadAttr::Brightness => {
-            let idx = source;
-            let pct = if idx == source {
-                laptop.get_brightness_pct()
-            } else {
-                cfg.power[idx].brightness
-            };
+            let pct = laptop.get_brightness_pct();
             println!("Current brightness: {}", pct);
         }
         ReadAttr::Logo => {
@@ -351,28 +381,24 @@ fn run_read(attr: ReadAttr) {
     }
 }
 
-fn run_write(attr: WriteAttr) {
+fn run_write(attr: WriteAttr, source: usize) {
     let mut laptop = open_laptop();
     let mut cfg = load_config();
-    let source = power_source_idx();
 
     match attr {
         WriteAttr::Fan(FanParams { speed }) => {
             if speed < 0 {
                 clap_error(ErrorKind::InvalidValue, "Fan speed must be 0 or higher");
             }
-            let idx = source;
-            cfg.power[idx].fan_rpm = speed;
+            cfg.power[source].fan_rpm = speed;
             save_config(&cfg);
-            if idx == source {
-                laptop.set_fan_rpm(speed as u16);
-            }
+            laptop.set_fan_rpm(speed as u16);
             println!("Fan speed set to {}", fan_desc(speed));
         }
         WriteAttr::Power(PowerParams {
-            pwr,
-            cpu_mode,
-            gpu_mode,
+            power: pwr,
+            cpu: cpu_mode,
+            gpu: gpu_mode,
         }) => {
             write_power_mode(&mut cfg, &mut laptop, source, pwr, cpu_mode, gpu_mode);
         }
@@ -380,29 +406,25 @@ fn run_write(attr: WriteAttr) {
             if brightness > 100 {
                 clap_error(ErrorKind::InvalidValue, "Brightness must be between 0 and 100");
             }
-            let idx = source;
-            cfg.power[idx].brightness = brightness;
-            cfg.mirror_lighting(idx);
+            cfg.power[source].brightness = brightness;
+            cfg.mirror_lighting(source);
             save_config(&cfg);
-            if idx == source {
-                laptop.set_brightness_pct(brightness);
-            }
+            laptop.set_brightness_pct(brightness);
             println!("Brightness set to {}", brightness);
         }
-        WriteAttr::Logo(LogoParams { logo_state }) => {
+        WriteAttr::Logo(LogoParams { state: logo_state }) => {
             if logo_state > 2 {
                 clap_error(ErrorKind::InvalidValue, "Logo mode must be 0, 1 or 2");
             }
-            let idx = source;
-            cfg.power[idx].logo_state = logo_state;
-            cfg.mirror_lighting(idx);
+            cfg.power[source].logo_state = logo_state;
+            cfg.mirror_lighting(source);
             save_config(&cfg);
-            if idx == source && laptop.has_feature("logo") {
+            if laptop.has_feature("logo") {
                 laptop.set_logo_led_state(logo_state);
             }
             println!("Logo set to {}", logo_desc(logo_state));
         }
-        WriteAttr::Sync(SyncParams { sync_state }) => {
+        WriteAttr::Sync(SyncParams { state: sync_state }) => {
             cfg.sync = sync_state.is_on();
             if cfg.sync {
                 cfg.mirror_lighting(source);
@@ -466,7 +488,7 @@ fn write_power_mode(
     profile.gpu_boost = gm;
     save_config(cfg);
 
-    if idx == power_source_idx() {
+    if idx == resolve_source(None) {
         laptop.set_power_mode(pwr, cm, gm);
     }
 
@@ -547,11 +569,10 @@ fn run_effect(effect: StandardEffect) {
     }
 }
 
-fn run_restore() {
+fn run_restore(source: usize) {
     let mut laptop = open_laptop();
     let cfg = load_config();
-    let idx = power_source_idx();
-    let p = cfg.power[idx];
+    let p = cfg.power[source];
 
     laptop.set_power_mode(p.power_mode, p.cpu_boost, p.gpu_boost);
     laptop.set_fan_rpm(p.fan_rpm as u16);
@@ -564,7 +585,7 @@ fn run_restore() {
     println!(
         "{}: restored {} profile - power {}, fan {}, brightness {}, logo {}, effect {}",
         laptop.name(),
-        if idx == 1 { "AC" } else { "battery" },
+        if source == 1 { "AC" } else { "battery" },
         power_mode_desc(p.power_mode),
         fan_desc(p.fan_rpm),
         p.brightness,
