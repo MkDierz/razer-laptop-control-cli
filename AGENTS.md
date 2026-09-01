@@ -8,7 +8,7 @@ Run all cargo commands from the repo root (the crate is at the root, not a subdi
 
 - `cargo build` / `cargo test` / `cargo clippy`
 - System deps to compile: `pkg-config`, `libudev`, `libusb-1.0` dev packages (Fedora: `systemd-devel libusb1-devel`; Debian: `libudev-dev libusb-1.0-0-dev`).
-- CI (`.github/workflows/ci.yml`, targets `main`) runs build + test only; GitHub Actions versions are managed by Dependabot.
+- No CI runs build+test on push/PR. The only workflow is `.github/workflows/release.yml` (tag-triggered, builds packages via FPM). Verify locally before pushing.
 
 ## Structure
 

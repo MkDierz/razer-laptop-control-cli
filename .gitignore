@@ -81,3 +81,4 @@ Mkfile.old
 
 # Nix files
 result
+logs_*/

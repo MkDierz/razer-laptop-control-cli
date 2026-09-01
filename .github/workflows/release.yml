@@ -37,8 +37,8 @@ jobs:
           path: target/release/razer-cli
           retention-days: 1
 
-  deb:
-    name: Package .deb
+  package:
+    name: Package
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -59,39 +59,16 @@ jobs:
       - name: Build .deb
         run: make deb
 
+      - name: Build .rpm
+        run: make rpm
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: deb
           path: target/pkg/*.deb
           retention-days: 1
-
-  rpm:
-    name: Package .rpm
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install deps
-        run: |
-          dnf install -y gcc systemd-devel libusb1-devel ruby-devel make && \
-          gem install fpm
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: razer-cli-linux-x86_64
-          path: target/release/
-
-      - name: Make binary executable
-        run: chmod +x target/release/razer-cli
-
-      - name: Build .rpm
-        run: make rpm
-
+          
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -99,42 +76,9 @@ jobs:
           path: target/pkg/*.rpm
           retention-days: 1
 
-  pacman:
-    name: Package .pkg.tar.zst
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install deps
-        run: |
-          pacman -Syu --noconfirm base-devel libusb-compat systemd-libs ruby && \
-          gem install fpm
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: razer-cli-linux-x86_64
-          path: target/release/
-
-      - name: Make binary executable
-        run: chmod +x target/release/razer-cli
-
-      - name: Build .pkg.tar.zst
-        run: make pacman
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pacman
-          path: target/pkg/*.pkg.tar.zst
-          retention-days: 1
-
   release:
     name: Create GitHub Release
-    needs: [deb, rpm, pacman]
+    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,4 +110,3 @@ jobs:
           files: |
             packages/*.deb
             packages/*.rpm
-            packages/*.pkg.tar.zst
