@@ -58,6 +58,7 @@ Mkfile.old
 **/CMakeFiles/
 **/CTestTestfile.cmake
 **/Makefile
+!/Makefile
 !/driver/Makefile
 !/driver/src/Makefile
 **/*.cbp

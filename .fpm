@@ -1,0 +1,9 @@
+-s dir
+--name razer-cli
+--license "GPL-2.0"
+--version 0.3.0
+--description "CLI control for Razer laptop fans, power modes and RGB keyboard"
+--url https://github.com/MkDierz/razer-laptop-control-no-dkms
+--maintainer MkDierz
+--depends libudev0
+--depends libusb-1.0-0

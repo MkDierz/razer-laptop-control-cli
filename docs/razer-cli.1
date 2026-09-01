@@ -1,0 +1,238 @@
+.TH RAZER-CLI 1 "2026-09-01" "razer-cli 0.3.0" "User Commands"
+.SH NAME
+razer-cli \- control fans, power modes and RGB keyboard of Razer laptops
+.SH SYNOPSIS
+.B razer-cli
+.RB [ \-\-source
+.IR ac|bat ]
+.I command
+.RI [ subcommand ]
+.RI [ options ]
+.SH DESCRIPTION
+.B razer-cli
+controls Razer laptop hardware directly over USB HID feature reports.
+No kernel module, no daemon, and no GUI are required.
+It can manage fan speed, power modes, keyboard backlighting, logo LED state,
+and the battery health optimizer.
+.PP
+Settings are persisted in a JSON configuration file at
+.IR ~/.local/share/razercontrol/config.json .
+The
+.B restore
+command reapplies saved settings at any time or can be invoked at boot via
+the included systemd user service.
+.SH OPTIONS
+.TP
+.BR \-\-source " " \fIac\fR|\fIbat\fR
+Target a specific power profile.
+If omitted, the profile is auto-detected from
+.IR /sys/class/power_supply/AC/online .
+.SH COMMANDS
+.SS read
+Read the current value of an attribute from hardware or configuration.
+.TP
+.B read fan
+Print the current fan speed.
+Returns \fBAuto (0)\fR when the fan is in automatic mode,
+the RPM value when running manually, or \fBUnknown\fR on error.
+.TP
+.B read power
+Print the current power mode (Balanced, Gaming, Creator, Silent, or Custom).
+When in Custom mode (4), also prints the CPU and GPU boost levels.
+.TP
+.B read brightness
+Print the current keyboard backlight brightness as a percentage (0\-100).
+.TP
+.B read logo
+Print the current logo LED state (Off, On, or Breathing).
+Read from the saved configuration.
+.TP
+.B read sync
+Print whether AC and battery lighting profiles are synced (true/false).
+.TP
+.B read bho
+Print the battery health optimizer state (on/off and threshold percentage).
+Returns an error message if the model does not support BHO.
+.SS write
+Write a new value.
+Changes are saved to the configuration and applied to hardware immediately
+when targeting the active power state.
+.TP
+.BR write fan " \-\-speed \fIRPM\fR"
+Set the fan speed.
+Use \fB0\fR for automatic control, or any positive integer for manual RPM.
+.TP
+.BR write power " \-\-power \fIMODE\fR"
+Set the power mode.
+Modes:
+.RS
+.IP 0 4
+Balanced
+.IP 1 4
+Gaming
+.IP 2 4
+Creator
+.IP 3 4
+Silent
+.IP 4 4
+Custom (requires \-\-cpu and \-\-gpu)
+.RE
+.TP
+.BR write power " \-\-power 4 \-\-cpu \fILEVEL\fR \-\-gpu \fILEVEL\fR"
+Set a custom power mode with explicit CPU and GPU boost levels.
+CPU boost: 0=Low, 1=Medium, 2=High, 3=Boost (model-dependent).
+GPU boost: 0=Low, 1=Medium, 2=High.
+Both \fB\-\-cpu\fR and \fB\-\-gpu\fR are required when power mode is 4.
+.TP
+.BR write brightness " \-\-brightness \fIPCT\fR"
+Set the keyboard backlight brightness.
+.I PCT
+must be between 0 and 100.
+If sync is enabled, the value is mirrored to the other power profile.
+.TP
+.BR write logo " \-\-state \fIVALUE\fR"
+Set the logo LED mode.
+States:
+.RS
+.IP 0 4
+Off
+.IP 1 4
+On
+.IP 2 4
+Breathing
+.RE
+If sync is enabled, the value is mirrored to the other power profile.
+.TP
+.BR write sync " \-\-state " \fIon\fR|\fIoff\fR"
+Enable or disable syncing of lighting settings (brightness, logo)
+between AC and battery profiles.
+.TP
+.BR write bho " \-\-state " \fIon\fR|\fIoff\fR
+Enable or disable the battery health optimizer.
+.TP
+.BR write bho " \-\-state on \-\-threshold \fIVALUE\fR"
+Enable BHO with a specific charging threshold.
+.I VALUE
+must be a multiple of 5 between 50 and 80.
+.SS effect
+Set a firmware keyboard lighting effect.
+The chosen effect is saved to the configuration and restored on reboot via
+.BR "razer-cli restore" .
+.TP
+.B effect off
+Turn off keyboard backlighting.
+.TP
+.B effect spectrum
+Enable spectrum cycling effect (cycles through all colors).
+.TP
+.BR effect wave " \-\-direction \fIDIR\fR"
+Enable the wave effect.
+.I DIR
+is \fB0\fR (left\-to\-right) or \fB1\fR (right\-to\-left).
+.TP
+.BR effect reactive " \-\-speed \fISPD\fR " \-\-red \fIR\fR " \-\-green \fIG\fR " \-\-blue \fIB\fR"
+Enable the reactive effect.
+.I SPD
+(0\-255) controls animation speed.
+.IR R ,\  G ,\  B
+(0\-255 each) set the color.
+.TP
+.BR effect static " \-\-red \fIR\fR " \-\-green \fIG\fR " \-\-blue \fIB\fR"
+Set a static solid color on the keyboard.
+.IR R ,\  G ,\  B
+are RGB values from 0 to 255.
+.TP
+.BR effect breathing " \-\-kind \fIK\fR " [breathing options]
+Enable the breathing effect.
+.I KIND
+selects the breathing mode:
+.RS
+.IP 0 4
+Single color (uses red1/green1/blue1)
+.IP 1 4
+Dual color (uses red1/green1/blue1 and red2/green2/blue2)
+.IP 2 4
+Random color
+.RE
+.TP
+.BR effect breathing " \-\-kind 0\-2 " \-\-red1 \fIR1\fR " \-\-green1 \fIG1\fR " \-\-blue1 \fIB1\fR " \-\-red2 \fIR2\fR " \-\-green2 \fIG2\fR " \-\-blue2 \fIB2\fR"
+Full breathing options with both color slots (0\-255 per channel).
+.TP
+.BR effect starlight " \-\-kind \fIK\fR " \-\-speed \fISPD\fR " [starlight options]
+Enable the starlight effect.
+.I KIND
+selects the mode:
+.RS
+.IP 0 4
+Single color
+.IP 1 4
+Dual color
+.IP 2 4
+Random color
+.RE
+.IR SPD " (0\-255) controls animation speed."
+.TP
+.BR effect starlight " \-\-kind 0\-2 " \-\-speed \fISPD\fR " \-\-red1 \fIR1\fR " \-\-green1 \fIG1\fR " \-\-blue1 \fIB1\fR " \-\-red2 \fIR2\fR " \-\-green2 \fIG2\fR " \-\-blue2 \fIB2\fR"
+Full starlight options with both color slots (0\-255 per channel).
+.SS restore
+Apply the saved configuration for the current power state.
+This re-applies power mode, fan speed, brightness, logo state, and the
+last keyboard effect.
+Typically used at boot (via the systemd user service) or after a suspend cycle.
+.SH FILES
+.TP
+.I ~/.local/share/razercontrol/config.json
+Persistent configuration storing power profiles, sync flag, and last effect.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Device not found, hardware communication error, or invalid arguments.
+.SH EXAMPLES
+Set fan to 3000 RPM on battery:
+.PP
+.RS
+.nf
+razer-cli --source bat write fan --speed 3000
+.fi
+.RE
+.PP
+Set custom power mode with high CPU and medium GPU:
+.PP
+.RS
+.nf
+razer-cli write power --power 4 --cpu 2 --gpu 1
+.fi
+.RE
+.PP
+Set static red keyboard color at 80% brightness:
+.PP
+.RS
+.nf
+razer-cli effect static --red 255 --green 0 --blue 0
+razer-cli write brightness --brightness 80
+.fi
+.RE
+.PP
+Enable battery health optimizer at 80% threshold:
+.PP
+.RS
+.nf
+razer-cli write bho --state on --threshold 80
+.fi
+.RE
+.PP
+Restore saved settings (e.g., at boot):
+.PP
+.RS
+.nf
+razer-cli restore
+.fi
+.RE
+.SH AUTHOR
+Maintained by MkDierz.
+.SH SEE ALSO
+.BR systemctl (1),
+.BR udevd (8)
